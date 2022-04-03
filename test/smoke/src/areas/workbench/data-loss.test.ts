@@ -118,7 +118,7 @@ export function setup(ensureStableCode: () => string | undefined, logger: Logger
 		}
 	});
 
-	describe.skip('Data Loss (stable -> insiders)', () => {
+	describe('Data Loss (stable -> insiders)', () => {
 
 		let insidersApp: Application | undefined = undefined;
 		let stableApp: Application | undefined = undefined;
@@ -148,6 +148,10 @@ export function setup(ensureStableCode: () => string | undefined, logger: Logger
 			stableOptions.codePath = stableCodePath;
 			stableOptions.userDataDir = userDataDir;
 			stableOptions.quality = Quality.Stable;
+
+			if (!stableOptions.legacy) {
+				this.skip(); // TODO@bpasero enable again once we shipped 1.67.x
+			}
 
 			stableApp = new Application(stableOptions);
 			await stableApp.start();
@@ -197,6 +201,10 @@ export function setup(ensureStableCode: () => string | undefined, logger: Logger
 			stableOptions.codePath = stableCodePath;
 			stableOptions.userDataDir = userDataDir;
 			stableOptions.quality = Quality.Stable;
+
+			if (!stableOptions.legacy) {
+				this.skip(); // TODO@bpasero enable again once we shipped 1.67.x
+			}
 
 			stableApp = new Application(stableOptions);
 			await stableApp.start();
