@@ -97,27 +97,28 @@ export class PlaywrightDriver implements IDriver {
 		}
 
 		// VSCode shutdown (desktop only)
+		let mainPid: number | undefined = undefined;
 		if (!this.options.web) {
 			try {
-				await measureAndLog(this._evaluateWithDriver(([driver]) => (driver as unknown as IDriver).exitApplication()), 'driver.exitApplication()', this.options.logger);
+				mainPid = await measureAndLog(this._evaluateWithDriver(([driver]) => (driver as unknown as IDriver).exitApplication()), 'driver.exitApplication()', this.options.logger);
 			} catch (error) {
 				this.options.logger.log(`Error exiting appliction (${error})`);
 			}
 		}
 
-		// Playwright teardown
+		// Playwright shutdown
 		try {
 			await measureAndLog(this.application.close(), 'playwright.close()', this.options.logger);
 		} catch (error) {
 			this.options.logger.log(`Error closing appliction (${error})`);
 		}
 
-		// Server teardown
+		// Server shutdown
 		if (typeof this.serverPid === 'number') {
 			await measureAndLog(teardown(this.serverPid, this.options.logger), 'teardown server', this.options.logger);
 		}
 
-		return false;
+		return mainPid ?? this.serverPid! /* when running web we must have a server Pid */;
 	}
 
 	async dispatchKeybinding(windowId: number, keybinding: string) {

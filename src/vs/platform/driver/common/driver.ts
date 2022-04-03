@@ -44,7 +44,7 @@ export interface IDriver {
 	startTracing(windowId: number, name: string): Promise<void>;
 	stopTracing(windowId: number, name: string, persist: boolean): Promise<void>;
 	reloadWindow(windowId: number): Promise<void>;
-	exitApplication(): Promise<boolean>;
+	exitApplication(): Promise<number /* main PID */>;
 	dispatchKeybinding(windowId: number, keybinding: string): Promise<void>;
 	click(windowId: number, selector: string, xoffset?: number | undefined, yoffset?: number | undefined): Promise<void>;
 	setValue(windowId: number, selector: string, text: string): Promise<void>;

@@ -109,10 +109,12 @@ export class Driver implements IDriver, IWindowDriverRegistry {
 		this.lifecycleMainService.reload(window);
 	}
 
-	exitApplication(): Promise<boolean> {
+	async exitApplication(): Promise<number> {
 		this.logService.info(`[driver] exitApplication()`);
 
-		return this.lifecycleMainService.quit();
+		this.lifecycleMainService.quit();
+
+		return process.pid;
 	}
 
 	async dispatchKeybinding(windowId: number, keybinding: string): Promise<void> {

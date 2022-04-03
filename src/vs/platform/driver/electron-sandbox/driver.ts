@@ -12,7 +12,7 @@ import { IMainProcessService } from 'vs/platform/ipc/electron-sandbox/services';
 import { INativeHostService } from 'vs/platform/native/electron-sandbox/native';
 
 interface INativeWindowDriverHelper {
-	exitApplication(): Promise<void>;
+	exitApplication(): Promise<number /* main process PID */>;
 }
 
 class NativeWindowDriver extends BrowserWindowDriver {
@@ -21,7 +21,7 @@ class NativeWindowDriver extends BrowserWindowDriver {
 		super();
 	}
 
-	exitApplication(): Promise<void> {
+	exitApplication(): Promise<number> {
 		return this.helper.exitApplication();
 	}
 }
