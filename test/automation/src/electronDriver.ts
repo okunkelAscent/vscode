@@ -24,8 +24,8 @@ export interface IElectronConfiguration {
 	readonly env?: NodeJS.ProcessEnv;
 }
 
-export async function resolveElectronConfiguration(options: LaunchOptions, logsPath = join(root, '.build', 'logs', options.remote ? 'smoke-tests-remote' : 'smoke-tests')): Promise<IElectronConfiguration> {
-	const { codePath, workspacePath, extensionsPath, userDataDir, remote, logger, extraArgs } = options;
+export async function resolveElectronConfiguration(options: LaunchOptions): Promise<IElectronConfiguration> {
+	const { codePath, workspacePath, extensionsPath, userDataDir, remote, logger, logsPath, extraArgs } = options;
 	const env = { ...process.env };
 
 	const args = [

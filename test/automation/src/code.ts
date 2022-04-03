@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as path from 'path';
+import { join } from 'path';
 import * as os from 'os';
 import * as cp from 'child_process';
 import { IDriver, IDisposable, IElement, Thenable, ILocalizedStrings, ILocaleInfo } from './driver';
@@ -14,7 +14,7 @@ import { Logger, measureAndLog } from './logger';
 import { copyExtension } from './extensions';
 import * as treekill from 'tree-kill';
 
-const repoPath = path.join(__dirname, '../../..');
+const rootPath = join(__dirname, '../../..');
 
 export interface LaunchOptions {
 	codePath?: string;
@@ -22,6 +22,7 @@ export interface LaunchOptions {
 	userDataDir: string;
 	extensionsPath: string;
 	logger: Logger;
+	logsPath: string;
 	verbose?: boolean;
 	extraArgs?: string[];
 	remote?: boolean;
@@ -74,7 +75,7 @@ export async function launch(options: LaunchOptions): Promise<Code> {
 		throw new Error('Smoke test process has terminated, refusing to spawn Code');
 	}
 
-	await measureAndLog(copyExtension(repoPath, options.extensionsPath, 'vscode-notebook-tests'), 'copyExtension(vscode-notebook-tests)', options.logger);
+	await measureAndLog(copyExtension(rootPath, options.extensionsPath, 'vscode-notebook-tests'), 'copyExtension(vscode-notebook-tests)', options.logger);
 
 	// Browser smoke tests
 	if (options.web) {

@@ -40,8 +40,7 @@ export class PlaywrightDriver implements IDriver {
 		private readonly context: playwright.BrowserContext,
 		private readonly page: playwright.Page,
 		private readonly serverPid: number | undefined,
-		private readonly tracePath: string | undefined /* undefined: tracing disabled */,
-		private readonly logger: Logger
+		private readonly options: LaunchOptions
 	) {
 	}
 
@@ -54,29 +53,29 @@ export class PlaywrightDriver implements IDriver {
 	}
 
 	async startTracing(windowId: number, name: string): Promise<void> {
-		if (!this.tracePath) {
+		if (!this.options.tracing) {
 			return; // tracing disabled
 		}
 
 		try {
-			await measureAndLog(this.context.tracing.startChunk({ title: name }), `startTracing for ${name}`, this.logger);
+			await measureAndLog(this.context.tracing.startChunk({ title: name }), `startTracing for ${name}`, this.options.logger);
 		} catch (error) {
 			// Ignore
 		}
 	}
 
 	async stopTracing(windowId: number, name: string, persist: boolean): Promise<void> {
-		if (!this.tracePath) {
+		if (!this.options.tracing) {
 			return; // tracing disabled
 		}
 
 		try {
 			let persistPath: string | undefined = undefined;
 			if (persist) {
-				persistPath = join(this.tracePath, `playwright-trace-${PlaywrightDriver.traceCounter++}-${name.replace(/\s+/g, '-')}.zip`);
+				persistPath = join(this.options.logsPath, `playwright-trace-${PlaywrightDriver.traceCounter++}-${name.replace(/\s+/g, '-')}.zip`);
 			}
 
-			await measureAndLog(this.context.tracing.stopChunk({ path: persistPath }), `stopTracing for ${name}`, this.logger);
+			await measureAndLog(this.context.tracing.stopChunk({ path: persistPath }), `stopTracing for ${name}`, this.options.logger);
 		} catch (error) {
 			// Ignore
 		}
@@ -88,21 +87,21 @@ export class PlaywrightDriver implements IDriver {
 
 	async exitApplication() {
 		try {
-			if (this.tracePath) {
-				await measureAndLog(this.context.tracing.stop(), 'stop tracing', this.logger);
+			if (this.options.tracing) {
+				await measureAndLog(this.context.tracing.stop(), 'stop tracing', this.options.logger);
 			}
 		} catch (error) {
 			// Ignore
 		}
 
 		try {
-			await measureAndLog(this.application.close(), 'Application.close()', this.logger);
+			await measureAndLog(this.application.close(), 'Application.close()', this.options.logger);
 		} catch (error) {
-			this.logger.log(`Error closing appliction (${error})`);
+			this.options.logger.log(`Error closing appliction (${error})`);
 		}
 
 		if (typeof this.serverPid === 'number') {
-			await measureAndLog(teardown(this.serverPid, this.logger), 'teardown server', this.logger);
+			await measureAndLog(teardown(this.serverPid, this.options.logger), 'teardown server', this.options.logger);
 		}
 
 		return false;
@@ -197,7 +196,6 @@ export class PlaywrightDriver implements IDriver {
 }
 
 const root = join(__dirname, '..', '..', '..');
-const logsPath = join(root, '.build', 'logs', 'smoke-tests-browser');
 
 let port = 9000;
 
@@ -214,13 +212,13 @@ export async function launch(options: LaunchOptions): Promise<{ serverProcess: C
 		client: {
 			dispose: () => { /* there is no client to dispose for browser, teardown is triggered via exitApplication call */ }
 		},
-		driver: new PlaywrightDriver(browser, context, page, serverProcess.pid, options.tracing ? logsPath : undefined, options.logger),
+		driver: new PlaywrightDriver(browser, context, page, serverProcess.pid, options),
 		kill: () => teardown(serverProcess.pid, options.logger)
 	};
 }
 
 async function launchServer(options: LaunchOptions) {
-	const { userDataDir, codePath, extensionsPath, logger } = options;
+	const { userDataDir, codePath, extensionsPath, logger, logsPath } = options;
 	const codeServerPath = codePath ?? process.env.VSCODE_REMOTE_SERVER_PATH;
 	const agentFolder = userDataDir;
 	await measureAndLog(promisify(mkdir)(agentFolder), `mkdir(${agentFolder})`, logger);

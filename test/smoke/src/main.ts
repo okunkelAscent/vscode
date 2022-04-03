@@ -28,7 +28,7 @@ import { setup as setupLocalizationTests } from './areas/workbench/localization.
 import { setup as setupLaunchTests } from './areas/workbench/launch.test';
 import { setup as setupTerminalTests } from './areas/terminal/terminal.test';
 
-const repoPath = path.join(__dirname, '..', '..', '..');
+const rootPath = path.join(__dirname, '..', '..', '..');
 
 const [, , ...args] = process.argv;
 const opts = minimist(args, {
@@ -64,6 +64,21 @@ const opts = minimist(args, {
 	electronArgs?: string;
 };
 
+const logsPath = (() => {
+	const logsParentPath = path.join(rootPath, '.build', 'logs');
+
+	let logsName: string;
+	if (opts.web) {
+		logsName = 'smoke-tests-browser';
+	} else if (opts.remote) {
+		logsName = opts.legacy ? 'smoke-tests-remote-legacy' : 'smoke-tests-remote';
+	} else {
+		logsName = opts.legacy ? 'smoke-tests-electron-legacy' : 'smoke-tests-electron';
+	}
+
+	return path.join(logsParentPath, logsName);
+})();
+
 const logger = createLogger();
 
 function createLogger(): Logger {
@@ -74,10 +89,12 @@ function createLogger(): Logger {
 		loggers.push(new ConsoleLogger());
 	}
 
+	// Prepare logs path
+	fs.rmSync(logsPath, { recursive: true, force: true, maxRetries: 3 });
+	mkdirp.sync(logsPath);
+
 	// Always log to log file
-	const logPath = path.join(repoPath, '.build', 'logs', opts.web ? 'smoke-tests-browser' : opts.remote ? 'smoke-tests-remote' : 'smoke-tests');
-	mkdirp.sync(logPath);
-	loggers.push(new FileLogger(path.join(logPath, 'smoke-test-runner.log')));
+	loggers.push(new FileLogger(path.join(logsPath, 'smoke-test-runner.log')));
 
 	return new MultiLogger(loggers);
 }
@@ -128,8 +145,8 @@ function parseVersion(version: string): { major: number; minor: number; patch: n
 if (!opts.web) {
 
 	function getDevElectronPath(): string {
-		const buildPath = path.join(repoPath, '.build');
-		const product = require(path.join(repoPath, 'product.json'));
+		const buildPath = path.join(rootPath, '.build');
+		const product = require(path.join(rootPath, 'product.json'));
 
 		switch (process.platform) {
 			case 'darwin':
@@ -178,7 +195,7 @@ if (!opts.web) {
 	} else {
 		testCodePath = getDevElectronPath();
 		electronPath = testCodePath;
-		process.env.VSCODE_REPOSITORY = repoPath;
+		process.env.VSCODE_REPOSITORY = rootPath;
 		process.env.VSCODE_DEV = '1';
 		process.env.VSCODE_CLI = '1';
 	}
@@ -217,7 +234,7 @@ else {
 	}
 
 	if (!testCodeServerPath) {
-		process.env.VSCODE_REPOSITORY = repoPath;
+		process.env.VSCODE_REPOSITORY = rootPath;
 		process.env.VSCODE_DEV = '1';
 		process.env.VSCODE_CLI = '1';
 
@@ -359,6 +376,7 @@ before(async function () {
 		extensionsPath,
 		waitTime: parseInt(opts['wait-time'] || '0') || 20,
 		logger,
+		logsPath,
 		verbose: opts.verbose,
 		remote: opts.remote,
 		web: opts.web,

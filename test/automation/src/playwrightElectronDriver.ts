@@ -8,14 +8,12 @@ import { IDriver, IDisposable } from './driver';
 import type { LaunchOptions } from './code';
 import { PlaywrightDriver } from './playwrightBrowserDriver';
 import { IElectronConfiguration, resolveElectronConfiguration } from './electronDriver';
-import { join } from 'path';
 import { measureAndLog } from './logger';
 
 export async function launch(options: LaunchOptions): Promise<{ client: IDisposable; driver: IDriver }> {
-	const logsPath = join(__dirname, '..', '..', '..', '.build', 'logs', 'smoke-tests-electron-browser');
 
 	// Resolve electron config and update
-	const { electronPath, args, env } = await resolveElectronConfiguration(options, logsPath);
+	const { electronPath, args, env } = await resolveElectronConfiguration(options);
 	args.push('--enable-smoke-test-driver', 'true');
 
 	// Launch electron via playwright
@@ -25,7 +23,7 @@ export async function launch(options: LaunchOptions): Promise<{ client: IDisposa
 		client: {
 			dispose: () => { /* there is no client to dispose for electron, teardown is triggered via exitApplication call */ }
 		},
-		driver: new PlaywrightDriver(electron, context, page, undefined /* no server */, options.tracing ? logsPath : undefined, options.logger),
+		driver: new PlaywrightDriver(electron, context, page, undefined /* no server */, options),
 	};
 }
 
