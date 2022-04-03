@@ -7,7 +7,7 @@ import { join } from 'path';
 import { Application, ApplicationOptions, Logger, Quality } from '../../../../automation';
 import { createApp, timeout, installDiagnosticsHandler, installAppAfterHandler, getRandomUserDataDir } from '../../utils';
 
-export function setup(ensureStableCode: () => string | undefined, logger: Logger) {
+export function setup(ensureStableCode: () => string | undefined, skipStable: boolean, logger: Logger) {
 	describe('Data Loss (insiders -> insiders)', () => {
 
 		let app: Application | undefined = undefined;
@@ -118,7 +118,7 @@ export function setup(ensureStableCode: () => string | undefined, logger: Logger
 		}
 	});
 
-	describe('Data Loss (stable -> insiders)', () => {
+	(skipStable ? describe.skip : describe)('Data Loss (stable -> insiders)', () => {
 
 		let insidersApp: Application | undefined = undefined;
 		let stableApp: Application | undefined = undefined;

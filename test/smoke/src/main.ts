@@ -415,7 +415,7 @@ after(async function () {
 });
 
 describe(`VSCode Smoke Tests (${opts.web ? 'Web' : opts.legacy ? 'Electron (legacy)' : 'Electron'})`, () => {
-	if (!opts.web) { setupDataLossTests(() => opts['stable-build'] /* Do not change, deferred for a reason! */, logger); }
+	if (!opts.web) { setupDataLossTests(() => opts['stable-build'] /* Do not change, deferred for a reason! */, !opts.legacy /* TODO@bpasero enable once 1.67.x ships */, logger); }
 	if (!opts.web) { setupPreferencesTests(logger); }
 	setupSearchTests(logger);
 	setupNotebookTests(logger);
