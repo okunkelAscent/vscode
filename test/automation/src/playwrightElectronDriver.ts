@@ -23,7 +23,7 @@ export async function launch(options: LaunchOptions): Promise<{ client: IDisposa
 		client: {
 			dispose: () => { /* there is no client to dispose for electron, teardown is triggered via exitApplication call */ }
 		},
-		driver: new PlaywrightDriver(electron, context, page, undefined /* no server */, options),
+		driver: new PlaywrightDriver(electron, context, page, undefined /* no server */, options)
 	};
 }
 

@@ -11,8 +11,23 @@ import { IInstantiationService, ServicesAccessor } from 'vs/platform/instantiati
 import { IMainProcessService } from 'vs/platform/ipc/electron-sandbox/services';
 import { INativeHostService } from 'vs/platform/native/electron-sandbox/native';
 
-export function registerWindowDriver(): void {
-	Object.assign(window, { driver: new BrowserWindowDriver() });
+interface INativeWindowDriverHelper {
+	exitApplication(): Promise<void>;
+}
+
+class NativeWindowDriver extends BrowserWindowDriver {
+
+	constructor(private readonly helper: INativeWindowDriverHelper) {
+		super();
+	}
+
+	exitApplication(): Promise<void> {
+		return this.helper.exitApplication();
+	}
+}
+
+export function registerWindowDriver(helper: INativeWindowDriverHelper): void {
+	Object.assign(window, { driver: new NativeWindowDriver(helper) });
 }
 
 class LegacyNativeWindowDriver extends BrowserWindowDriver {

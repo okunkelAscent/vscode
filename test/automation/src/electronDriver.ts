@@ -89,6 +89,9 @@ export async function resolveElectronConfiguration(options: LaunchOptions): Prom
 	};
 }
 
+/**
+ * @deprecated should use the playwright based electron support instead
+ */
 export async function launch(options: LaunchOptions): Promise<{ electronProcess: ChildProcess; client: IDisposable; driver: IDriver; kill: () => Promise<void> }> {
 	const { codePath, logger, verbose } = options;
 	const { env, args, electronPath } = await resolveElectronConfiguration(options);

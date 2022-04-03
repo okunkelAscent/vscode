@@ -580,7 +580,12 @@ export class NativeWindow extends Disposable {
 
 		// Browser Driver
 		if (this.environmentService.args['enable-smoke-test-driver']) {
-			registerWindowDriver();
+			const that = this;
+			registerWindowDriver({
+				exitApplication(): Promise<void> {
+					return that.nativeHostService.quit();
+				}
+			});
 		}
 
 		// Legacy Driver (TODO@bpasero remove me eventually)

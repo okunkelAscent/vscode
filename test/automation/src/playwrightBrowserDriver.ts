@@ -86,6 +86,8 @@ export class PlaywrightDriver implements IDriver {
 	}
 
 	async exitApplication() {
+
+		// Stop tracing
 		try {
 			if (this.options.tracing) {
 				await measureAndLog(this.context.tracing.stop(), 'stop tracing', this.options.logger);
@@ -94,12 +96,23 @@ export class PlaywrightDriver implements IDriver {
 			// Ignore
 		}
 
+		// VSCode shutdown (desktop only)
+		if (!this.options.web) {
+			try {
+				await measureAndLog(this._evaluateWithDriver(([driver]) => (driver as unknown as IDriver).exitApplication()), 'driver.exitApplication()', this.options.logger);
+			} catch (error) {
+				this.options.logger.log(`Error exiting appliction (${error})`);
+			}
+		}
+
+		// Playwright teardown
 		try {
-			await measureAndLog(this.application.close(), 'Application.close()', this.options.logger);
+			await measureAndLog(this.application.close(), 'playwright.close()', this.options.logger);
 		} catch (error) {
 			this.options.logger.log(`Error closing appliction (${error})`);
 		}
 
+		// Server teardown
 		if (typeof this.serverPid === 'number') {
 			await measureAndLog(teardown(this.serverPid, this.options.logger), 'teardown server', this.options.logger);
 		}
