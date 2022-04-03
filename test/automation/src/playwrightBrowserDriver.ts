@@ -15,37 +15,32 @@ import { PageFunction } from 'playwright-core/types/structs';
 import { Logger, measureAndLog } from './logger';
 import type { LaunchOptions } from './code';
 
-const width = 1200;
-const height = 800;
+export class PlaywrightDriver implements IDriver {
 
-const root = join(__dirname, '..', '..', '..');
-const logsPath = join(root, '.build', 'logs', 'smoke-tests-browser');
+	private static traceCounter = 1;
 
-const vscodeToPlaywrightKey: { [key: string]: string } = {
-	cmd: 'Meta',
-	ctrl: 'Control',
-	shift: 'Shift',
-	enter: 'Enter',
-	escape: 'Escape',
-	right: 'ArrowRight',
-	up: 'ArrowUp',
-	down: 'ArrowDown',
-	left: 'ArrowLeft',
-	home: 'Home',
-	esc: 'Escape'
-};
-
-let traceCounter = 1;
-
-class PlaywrightDriver implements IDriver {
+	private static readonly vscodeToPlaywrightKey: { [key: string]: string } = {
+		cmd: 'Meta',
+		ctrl: 'Control',
+		shift: 'Shift',
+		enter: 'Enter',
+		escape: 'Escape',
+		right: 'ArrowRight',
+		up: 'ArrowUp',
+		down: 'ArrowDown',
+		left: 'ArrowLeft',
+		home: 'Home',
+		esc: 'Escape'
+	};
 
 	_serviceBrand: undefined;
 
 	constructor(
-		private readonly server: ChildProcess,
-		private readonly browser: playwright.Browser,
+		private readonly application: playwright.Browser | playwright.ElectronApplication,
 		private readonly context: playwright.BrowserContext,
 		private readonly page: playwright.Page,
+		private readonly serverPid: number | undefined,
+		private readonly tracePath: string | undefined /* undefined: tracing disabled */,
 		private readonly logger: Logger
 	) {
 	}
@@ -59,6 +54,10 @@ class PlaywrightDriver implements IDriver {
 	}
 
 	async startTracing(windowId: number, name: string): Promise<void> {
+		if (!this.tracePath) {
+			return; // tracing disabled
+		}
+
 		try {
 			await measureAndLog(this.context.tracing.startChunk({ title: name }), `startTracing for ${name}`, this.logger);
 		} catch (error) {
@@ -67,10 +66,14 @@ class PlaywrightDriver implements IDriver {
 	}
 
 	async stopTracing(windowId: number, name: string, persist: boolean): Promise<void> {
+		if (!this.tracePath) {
+			return; // tracing disabled
+		}
+
 		try {
 			let persistPath: string | undefined = undefined;
 			if (persist) {
-				persistPath = join(logsPath, `playwright-trace-${traceCounter++}-${name.replace(/\s+/g, '-')}.zip`);
+				persistPath = join(this.tracePath, `playwright-trace-${PlaywrightDriver.traceCounter++}-${name.replace(/\s+/g, '-')}.zip`);
 			}
 
 			await measureAndLog(this.context.tracing.stopChunk({ path: persistPath }), `stopTracing for ${name}`, this.logger);
@@ -80,23 +83,27 @@ class PlaywrightDriver implements IDriver {
 	}
 
 	async reloadWindow(windowId: number) {
-		throw new Error('Unsupported');
+		await this.page.reload();
 	}
 
 	async exitApplication() {
 		try {
-			await measureAndLog(this.context.tracing.stop(), 'stop tracing', this.logger);
+			if (this.tracePath) {
+				await measureAndLog(this.context.tracing.stop(), 'stop tracing', this.logger);
+			}
 		} catch (error) {
 			// Ignore
 		}
 
 		try {
-			await measureAndLog(this.browser.close(), 'Browser.close()', this.logger);
+			await measureAndLog(this.application.close(), 'Application.close()', this.logger);
 		} catch (error) {
-			// Ignore
+			this.logger.log(`Error closing appliction (${error})`);
 		}
 
-		await measureAndLog(teardown(this.server, this.logger), 'teardown server', this.logger);
+		if (typeof this.serverPid === 'number') {
+			await measureAndLog(teardown(this.serverPid, this.logger), 'teardown server', this.logger);
+		}
 
 		return false;
 	}
@@ -117,8 +124,8 @@ class PlaywrightDriver implements IDriver {
 			const keys = chord.split('+');
 			const keysDown: string[] = [];
 			for (let i = 0; i < keys.length; i++) {
-				if (keys[i] in vscodeToPlaywrightKey) {
-					keys[i] = vscodeToPlaywrightKey[keys[i]];
+				if (keys[i] in PlaywrightDriver.vscodeToPlaywrightKey) {
+					keys[i] = PlaywrightDriver.vscodeToPlaywrightKey[keys[i]];
 				}
 				await this.page.keyboard.down(keys[i]);
 				keysDown.push(keys[i]);
@@ -134,10 +141,6 @@ class PlaywrightDriver implements IDriver {
 	async click(windowId: number, selector: string, xoffset?: number | undefined, yoffset?: number | undefined) {
 		const { x, y } = await this.getElementXY(windowId, selector, xoffset, yoffset);
 		await this.page.mouse.click(x + (xoffset ? xoffset : 0), y + (yoffset ? yoffset : 0));
-	}
-
-	async doubleClick(windowId: number, selector: string) {
-		throw new Error('Unsupported');
 	}
 
 	async setValue(windowId: number, selector: string, text: string) {
@@ -188,11 +191,13 @@ class PlaywrightDriver implements IDriver {
 		return new Promise<void>(resolve => setTimeout(resolve, ms));
 	}
 
-	// TODO: Cache
 	private async _getDriverHandle(): Promise<playwright.JSHandle<IWindowDriver>> {
 		return this.page.evaluateHandle('window.driver');
 	}
 }
+
+const root = join(__dirname, '..', '..', '..');
+const logsPath = join(root, '.build', 'logs', 'smoke-tests-browser');
 
 let port = 9000;
 
@@ -209,8 +214,8 @@ export async function launch(options: LaunchOptions): Promise<{ serverProcess: C
 		client: {
 			dispose: () => { /* there is no client to dispose for browser, teardown is triggered via exitApplication call */ }
 		},
-		driver: new PlaywrightDriver(serverProcess, browser, context, page, options.logger),
-		kill: () => teardown(serverProcess, options.logger)
+		driver: new PlaywrightDriver(browser, context, page, serverProcess.pid, options.tracing ? logsPath : undefined, options.logger),
+		kill: () => teardown(serverProcess.pid, options.logger)
 	};
 }
 
@@ -257,21 +262,23 @@ async function launchServer(options: LaunchOptions) {
 }
 
 async function launchBrowser(options: LaunchOptions, endpoint: string) {
-	const { logger, workspacePath } = options;
+	const { logger, workspacePath, tracing, headless } = options;
 
-	const browser = await measureAndLog(playwright[options.browser ?? 'chromium'].launch({ headless: options.headless ?? false }), 'playwright#launch', logger);
+	const browser = await measureAndLog(playwright[options.browser ?? 'chromium'].launch({ headless: headless ?? false }), 'playwright#launch', logger);
 	browser.on('disconnected', () => logger.log(`Playwright: browser disconnected`));
 
 	const context = await measureAndLog(browser.newContext(), 'browser.newContext', logger);
 
-	try {
-		await measureAndLog(context.tracing.start({ screenshots: true, snapshots: true, sources: true }), 'context.tracing.start()', logger);
-	} catch (error) {
-		logger.log(`Failed to start playwright tracing: ${error}`); // do not fail the build when this fails
+	if (tracing) {
+		try {
+			await measureAndLog(context.tracing.start({ screenshots: true, snapshots: true, sources: true }), 'context.tracing.start()', logger);
+		} catch (error) {
+			logger.log(`Failed to start playwright tracing: ${error}`); // do not fail the build when this fails
+		}
 	}
 
 	const page = await measureAndLog(context.newPage(), 'context.newPage()', logger);
-	await measureAndLog(page.setViewportSize({ width, height }), 'page.setViewportSize', logger);
+	await measureAndLog(page.setViewportSize({ width: 1200, height: 800 }), 'page.setViewportSize', logger);
 
 	page.on('pageerror', async (error) => logger.log(`Playwright ERROR: page error: ${error}`));
 	page.on('crash', () => logger.log('Playwright ERROR: page crash'));
@@ -288,8 +295,7 @@ async function launchBrowser(options: LaunchOptions, endpoint: string) {
 	return { browser, context, page };
 }
 
-async function teardown(server: ChildProcess, logger: Logger): Promise<void> {
-	const serverPid = server.pid;
+async function teardown(serverPid: number | undefined, logger: Logger): Promise<void> {
 	if (typeof serverPid !== 'number') {
 		return;
 	}

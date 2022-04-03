@@ -8,7 +8,8 @@ import * as os from 'os';
 import * as cp from 'child_process';
 import { IDriver, IDisposable, IElement, Thenable, ILocalizedStrings, ILocaleInfo } from './driver';
 import { launch as launchElectron } from './electronDriver';
-import { launch as launchPlaywright } from './playwrightDriver';
+import { launch as launchPlaywrightBrowser } from './playwrightBrowserDriver';
+import { launch as launchPlaywrightElectron } from './playwrightElectronDriver';
 import { Logger, measureAndLog } from './logger';
 import { copyExtension } from './extensions';
 import * as treekill from 'tree-kill';
@@ -25,6 +26,8 @@ export interface LaunchOptions {
 	extraArgs?: string[];
 	remote?: boolean;
 	web?: boolean;
+	legacy?: boolean;
+	tracing?: boolean;
 	headless?: boolean;
 	browser?: 'chromium' | 'webkit' | 'firefox';
 }
@@ -75,18 +78,25 @@ export async function launch(options: LaunchOptions): Promise<Code> {
 
 	// Browser smoke tests
 	if (options.web) {
-		const { serverProcess, client, driver, kill } = await measureAndLog(launchPlaywright(options), 'launch playwright', options.logger);
+		const { serverProcess, client, driver, kill } = await measureAndLog(launchPlaywrightBrowser(options), 'launch playwright (browser)', options.logger);
 		registerInstance(serverProcess, options.logger, 'server', kill);
 
-		return new Code(client, driver, options.logger, serverProcess);
+		return new Code(client, driver, options.logger, serverProcess.pid);
 	}
 
-	// Electron smoke tests
+	// Electron smoke tests (playwright)
+	else if (!options.legacy) {
+		const { client, driver } = await measureAndLog(launchPlaywrightElectron(options), 'launch playwright (electron)', options.logger);
+
+		return new Code(client, driver, options.logger, undefined);
+	}
+
+	// Electron smoke tests (legacy driver)
 	else {
 		const { electronProcess, client, driver, kill } = await measureAndLog(launchElectron(options), 'launch electron', options.logger);
 		registerInstance(electronProcess, options.logger, 'electron', kill);
 
-		return new Code(client, driver, options.logger, electronProcess);
+		return new Code(client, driver, options.logger, electronProcess.pid);
 	}
 }
 
@@ -135,7 +145,7 @@ export class Code {
 		private client: IDisposable,
 		driver: IDriver,
 		readonly logger: Logger,
-		private readonly mainProcess: cp.ChildProcess
+		private readonly mainProcessPid: number | undefined
 	) {
 		this.driver = new Proxy(driver, {
 			get(target, prop) {
@@ -197,34 +207,41 @@ export class Code {
 			});
 
 			// Await the exit of the application
-			(async () => {
-				let retries = 0;
-				while (!done) {
-					retries++;
+			const pid = this.mainProcessPid;
+			if (typeof pid === 'number') {
+				(async () => {
+					let retries = 0;
+					while (!done) {
+						retries++;
 
-					if (retries === 20) {
-						this.logger.log('Smoke test exit call did not terminate process after 10s, forcefully exiting the application...');
+						if (retries === 20) {
+							this.logger.log('Smoke test exit call did not terminate process after 10s, forcefully exiting the application...');
 
-						// no need to await since we're polling for the process to die anyways
-						treekill(this.mainProcess.pid!, err => {
-							this.logger.log('Failed to kill Electron process tree:', err?.message);
-						});
+							// no need to await since we're polling for the process to die anyways
+							treekill(pid, err => {
+								this.logger.log('Failed to kill Electron process tree:', err?.message);
+							});
+						}
+
+						if (retries === 40) {
+							done = true;
+							reject(new Error('Smoke test exit call did not terminate process after 20s, giving up'));
+						}
+
+						try {
+							process.kill(pid, 0); // throws an exception if the process doesn't exist anymore.
+							await new Promise(resolve => setTimeout(resolve, 500));
+						} catch (error) {
+							done = true;
+							resolve();
+						}
 					}
+				})();
+			} else {
+				this.logger.log('Unabe to await exit of application due to missing main PID');
 
-					if (retries === 40) {
-						done = true;
-						reject(new Error('Smoke test exit call did not terminate process after 20s, giving up'));
-					}
-
-					try {
-						process.kill(this.mainProcess.pid!, 0); // throws an exception if the process doesn't exist anymore.
-						await new Promise(resolve => setTimeout(resolve, 500));
-					} catch (error) {
-						done = true;
-						resolve();
-					}
-				}
-			})();
+				resolve();
+			}
 		}).finally(() => {
 			this.dispose();
 		}), 'Code#exit()', this.logger);

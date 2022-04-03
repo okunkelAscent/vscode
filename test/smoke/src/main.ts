@@ -44,7 +44,9 @@ const opts = minimist(args, {
 		'verbose',
 		'remote',
 		'web',
-		'headless'
+		'headless',
+		'legacy',
+		'tracing'
 	],
 	default: {
 		verbose: false
@@ -54,6 +56,8 @@ const opts = minimist(args, {
 	remote?: boolean;
 	headless?: boolean;
 	web?: boolean;
+	legacy?: boolean;
+	tracing?: boolean;
 	build?: string;
 	'stable-build'?: string;
 	browser?: string;
@@ -358,6 +362,8 @@ before(async function () {
 		verbose: opts.verbose,
 		remote: opts.remote,
 		web: opts.web,
+		legacy: opts.legacy,
+		tracing: opts.tracing,
 		headless: opts.headless,
 		browser: opts.browser,
 		extraArgs: (opts.electronArgs || '').split(' ').map(a => a.trim()).filter(a => !!a)
@@ -390,7 +396,7 @@ after(async function () {
 	}
 });
 
-describe(`VSCode Smoke Tests (${opts.web ? 'Web' : 'Electron'})`, () => {
+describe(`VSCode Smoke Tests (${opts.web ? 'Web' : opts.legacy ? 'Electron (legacy)' : 'Electron'})`, () => {
 	if (!opts.web) { setupDataLossTests(() => opts['stable-build'] /* Do not change, deferred for a reason! */, logger); }
 	if (!opts.web) { setupPreferencesTests(logger); }
 	setupSearchTests(logger);
